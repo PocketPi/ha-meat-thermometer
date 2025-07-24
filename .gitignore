@@ -54,3 +54,5 @@ dkms.conf
 build
 script
 managed_components
+
+.cache/
