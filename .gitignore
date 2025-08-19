@@ -56,3 +56,5 @@ script
 managed_components
 
 .cache/
+
+front/web-app/node_modules/

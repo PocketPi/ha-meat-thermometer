@@ -1,4 +1,14 @@
 dependencies:
+  espressif/mdns:
+    component_hash: 3ec0af5f6bce310512e90f482388d21cc7c0e99668172d2f895356165fc6f7c5
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.8.2
   espressif/qrcode:
     component_hash: 3b493771bc5d6ad30cbf87c25bf784aada8a08c941504355b55d6b75518ed7bc
     dependencies: []
@@ -9,7 +19,17 @@ dependencies:
   idf:
     source:
       type: idf
-    version: 5.4.1
+    version: 5.5.0
+  joltwallet/littlefs:
+    component_hash: 8e12955f47e27e6070b76715a96d6c75fc2b44f069e8c33679332d9bdd3120c4
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.20.1
   lvgl/lvgl:
     component_hash: d7c1ac037ae6e85d94897f807d6e7ba0946a83e720074fc95a4f6241da9f9f53
     dependencies: []
@@ -18,8 +38,10 @@ dependencies:
       type: service
     version: 8.4.0
 direct_dependencies:
+- espressif/mdns
 - espressif/qrcode
+- joltwallet/littlefs
 - lvgl/lvgl
-manifest_hash: d691eb0dbe962d88f537d977696b9ed4eebb569c4c10b9c61345744415fe7e7c
+manifest_hash: 29f56f396aa5afbace495d3b47b7167e9b687fabda304808143941d8b907818e
 target: esp32s3
 version: 2.0.0
