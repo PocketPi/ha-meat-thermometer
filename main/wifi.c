@@ -51,12 +51,12 @@ void wifi_init(void) {
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
 
     /* Initialize AP */
-    ESP_LOGI(TAG_AP, "ESP_WIFI_MODE_AP");
-    esp_netif_t *esp_netif_ap = wifi_init_softap();
+    // ESP_LOGI(TAG_AP, "ESP_WIFI_MODE_AP");
+    // esp_netif_t *esp_netif_ap = wifi_init_softap();
 
     /* Initialize STA */
-    // ESP_LOGI(TAG_STA, "ESP_WIFI_MODE_STA");
-    // esp_netif_t *esp_netif_sta = wifi_init_sta();
+    ESP_LOGI(TAG_STA, "ESP_WIFI_MODE_STA");
+    esp_netif_t *esp_netif_sta = wifi_init_sta();
 
     /* Start WiFi */
     ESP_ERROR_CHECK(esp_wifi_start());

@@ -4,8 +4,8 @@
 
 static const char *TAG = "wifi_sta";
 
-#define STA_SSID          "ha-meat-thermometer"
-#define STA_PASSWORD      "12345678"
+#define STA_SSID          "Peter"
+#define STA_PASSWORD      "1234567890"
 #define STA_MAXIMUM_RETRY 10
 
 /* Initialize wifi station */
@@ -32,6 +32,8 @@ esp_netif_t *wifi_init_sta(void) {
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_sta_config));
 
     ESP_LOGI(TAG, "wifi_init_sta finished.");
+
+    esp_wifi_connect();
 
     return esp_netif_sta;
 }
