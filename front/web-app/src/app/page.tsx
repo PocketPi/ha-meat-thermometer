@@ -1,13 +1,17 @@
-import  SystemInfo from "./api";
+"use client"
+import Link from "next/link";
+import SystemInfo from "./api";
+import { useState } from "react";
 
 export default function Home() {
+  const [activePage, setActivePage] = useState("main")
+
   return (
     <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
       <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-          Peter here
-
-          <SystemInfo />
+        Peter here
+        {activePage === "system" && <SystemInfo />}
       </main>
-    </div>
+    </div >
   );
 }

@@ -13,8 +13,8 @@ static const char *TAG = "main";
 #define FS_MOUNT_POINT "/www"
 #define MDNS_HOST_NAME "dashboard"
 
-#define EXAMPLE_ESP_WIFI_SSID      "Peter"
-#define EXAMPLE_ESP_WIFI_PASS      "1234567890"
+#define EXAMPLE_ESP_WIFI_SSID      "InternetMaskinen"
+#define EXAMPLE_ESP_WIFI_PASS      "GroenneGaverGenialt"
 #define EXAMPLE_ESP_MAXIMUM_RETRY  3
 
 esp_err_t start_rest_server(const char *base_path);
