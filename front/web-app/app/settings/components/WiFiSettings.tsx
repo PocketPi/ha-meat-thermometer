@@ -27,7 +27,7 @@ export default function WiFiSettingsComponent({ settings, onSettingsChange }: Wi
   const [selectedNetwork, setSelectedNetwork] = useState<WiFiNetwork | null>(null)
   const [showPassword, setShowPassword] = useState(false)
   const { networks: wifiNetworks, isLoading: isScanning, error: scanError, mutate: refreshWifiScan, data: wifiData } = useWifiScan()
-  const { data: stationInfo, isLoading: isStationLoading, mutate: refreshStationInfo } = useWiFiStationInfo()
+  const { data: stationInfo, isLoading: isStationLoading } = useWiFiStationInfo()
   const { setCredentials } = useSetWiFiCredentials()
 
   const scanWiFiNetworks = async () => {

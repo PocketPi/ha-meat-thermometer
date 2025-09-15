@@ -3,7 +3,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card"
 import { Input } from "../../../components/ui/input"
 import { Label } from "../../../components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../components/ui/select"
 import { Switch } from "../../../components/ui/switch"
 import { Radio } from "lucide-react"
 import { MQTTSettings } from "../types"
@@ -118,19 +117,19 @@ export default function MQTTSettingsComponent({ settings, onSettingsChange }: MQ
 
               <div className="space-y-2">
                 <Label htmlFor="mqtt-qos">QoS Level</Label>
-                <Select
-                  value={settings.qos.toString()}
-                  onValueChange={(value) => onSettingsChange({ ...settings, qos: Number.parseInt(value) })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="0">0 - At most once</SelectItem>
-                    <SelectItem value="1">1 - At least once</SelectItem>
-                    <SelectItem value="2">2 - Exactly once</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Input
+                  id="mqtt-qos"
+                  type="number"
+                  min="0"
+                  max="2"
+                  value={settings.qos}
+                  onChange={(e) => {
+                    const value = e.target.value === "" ? 0 : Number(e.target.value)
+                    onSettingsChange({ ...settings, qos: isNaN(value) ? 0 : Math.max(0, Math.min(2, value)) })
+                  }}
+                  placeholder="0"
+                />
+                <p className="text-xs text-muted-foreground">0: At most once, 1: At least once, 2: Exactly once</p>
               </div>
             </div>
 
