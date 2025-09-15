@@ -6,6 +6,7 @@
 #include "esp_log.h"
 #include "esp_vfs.h"
 #include "cJSON.h"
+#include "wifi_scan.h"
 
 static const char *REST_TAG = "esp-rest";
 #define REST_CHECK(a, str, goto_tag, ...)                                              \
@@ -64,11 +65,24 @@ static esp_err_t rest_common_get_handler(httpd_req_t *req)
         *query_start = '\0';  // Remove query parameters
     }
     
+    ESP_LOGI(REST_TAG, "URI: %s, base_path: %s", uri_path, rest_context->base_path);
+    
     if (uri_path[strlen(uri_path) - 1] == '/') {
         strlcat(filepath, "/index.html", sizeof(filepath));
     } else {
         strlcat(filepath, uri_path, sizeof(filepath));
+        
+        // Check if the file exists, if not try adding /index.html for SPA routing
+        int test_fd = open(filepath, O_RDONLY, 0);
+        if (test_fd == -1) {
+            // File doesn't exist, try with /index.html for directory routes
+            strlcat(filepath, "/index.html", sizeof(filepath));
+        } else {
+            close(test_fd);
+        }
     }
+    
+    ESP_LOGI(REST_TAG, "Final filepath: %s", filepath);
     
     int fd = open(filepath, O_RDONLY, 0);
     if (fd == -1) {
@@ -108,39 +122,6 @@ static esp_err_t rest_common_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-/* Simple handler for light brightness control */
-static esp_err_t light_brightness_post_handler(httpd_req_t *req)
-{
-    int total_len = req->content_len;
-    int cur_len = 0;
-    char *buf = ((rest_server_context_t *)(req->user_ctx))->scratch;
-    int received = 0;
-    if (total_len >= SCRATCH_BUFSIZE) {
-        /* Respond with 500 Internal Server Error */
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "content too long");
-        return ESP_FAIL;
-    }
-    while (cur_len < total_len) {
-        received = httpd_req_recv(req, buf + cur_len, total_len);
-        if (received <= 0) {
-            /* Respond with 500 Internal Server Error */
-            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to post control value");
-            return ESP_FAIL;
-        }
-        cur_len += received;
-    }
-    buf[total_len] = '\0';
-
-    cJSON *root = cJSON_Parse(buf);
-    int red = cJSON_GetObjectItem(root, "red")->valueint;
-    int green = cJSON_GetObjectItem(root, "green")->valueint;
-    int blue = cJSON_GetObjectItem(root, "blue")->valueint;
-    ESP_LOGI(REST_TAG, "Light control: red = %d, green = %d, blue = %d", red, green, blue);
-    cJSON_Delete(root);
-    httpd_resp_sendstr(req, "Post control value successfully");
-    return ESP_OK;
-}
-
 /* Simple handler for getting system handler */
 static esp_err_t system_info_get_handler(httpd_req_t *req)
 {
@@ -167,6 +148,46 @@ static esp_err_t temperature_data_get_handler(httpd_req_t *req)
     httpd_resp_sendstr(req, sys_info);
     free((void *)sys_info);
     cJSON_Delete(root);
+    return ESP_OK;
+}
+
+/* Handler for WiFi scan */
+static esp_err_t wifi_scan_get_handler(httpd_req_t *req)
+{
+    httpd_resp_set_type(req, "application/json");
+    
+    // Maximum number of APs to scan
+    #define MAX_AP_SCAN 10
+    wifi_ap_record_t ap_info[MAX_AP_SCAN];
+
+    ESP_LOGI(REST_TAG, "Performing WiFi scan");
+    
+    // Perform WiFi scan
+    int ap_count = wifi_scan(ap_info, MAX_AP_SCAN);
+    ESP_LOGI(REST_TAG, "WiFi scan complete");
+    
+    cJSON *root = cJSON_CreateObject();
+    cJSON *networks = cJSON_CreateArray();
+    ESP_LOGI(REST_TAG, "Creating JSON response");
+
+    for (int i = 0; i < ap_count; i++) {
+        cJSON *network = cJSON_CreateObject();
+        cJSON_AddStringToObject(network, "ssid", (char*)ap_info[i].ssid);
+        cJSON_AddNumberToObject(network, "rssi", ap_info[i].rssi);
+        cJSON_AddNumberToObject(network, "authmode", ap_info[i].authmode);
+        cJSON_AddItemToArray(networks, network);
+    }
+    
+    cJSON_AddItemToObject(root, "networks", networks);
+    cJSON_AddNumberToObject(root, "count", ap_count);
+    ESP_LOGI(REST_TAG, "JSON response created");
+    
+    ESP_LOGI(REST_TAG, "Sending response");
+    const char *response = cJSON_Print(root);
+    httpd_resp_sendstr(req, response);
+    free((void *)response);
+    cJSON_Delete(root);
+    ESP_LOGI(REST_TAG, "Response sent");
     return ESP_OK;
 }
 
@@ -202,14 +223,14 @@ esp_err_t start_rest_server(const char *base_path)
     };
     httpd_register_uri_handler(server, &temperature_data_get_uri);
 
-    /* URI handler for light brightness control */
-    httpd_uri_t light_brightness_post_uri = {
-        .uri = "/api/v1/light/brightness",
-        .method = HTTP_POST,
-        .handler = light_brightness_post_handler,
+    /* URI handler for WiFi scan */
+    httpd_uri_t wifi_scan_get_uri = {
+        .uri = "/api/v1/wifi/scan",
+        .method = HTTP_GET,
+        .handler = wifi_scan_get_handler,
         .user_ctx = rest_context
     };
-    httpd_register_uri_handler(server, &light_brightness_post_uri);
+    httpd_register_uri_handler(server, &wifi_scan_get_uri);
 
     /* URI handler for getting web server files */
     httpd_uri_t common_get_uri = {

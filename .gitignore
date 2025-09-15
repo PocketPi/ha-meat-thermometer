@@ -58,3 +58,5 @@ managed_components
 .cache/
 
 front/web-app/node_modules/
+front/web-app/.next/
+front/web-app/dist/
