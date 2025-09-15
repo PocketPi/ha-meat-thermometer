@@ -3,13 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
-    "dev:server": "NODE_ENV=development pnpm exec tsx server.ts",
-    "build": "next build --turbopack",
-    "build:server": "node build-server.js",
-    "build:server-only": "pnpm exec tsc server.ts --outDir dist --target es2020 --module commonjs --esModuleInterop --allowSyntheticDefaultImports",
+    "dev": "NODE_ENV=development next dev --turbopack",
+    "dev:esp32": "NODE_ENV=development next dev --turbopack",
+    "build": "NODE_ENV=production next build --turbopack",
     "start": "next start",
-    "start:server": "NODE_ENV=production node dist/server.js",
+    "test:esp32": "node test-esp32.mjs",
     "lint": "eslint"
   },
   "dependencies": {

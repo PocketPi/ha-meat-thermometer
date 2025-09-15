@@ -3,7 +3,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card"
 import { Input } from "../../../components/ui/input"
 import { Label } from "../../../components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../components/ui/select"
 import { Switch } from "../../../components/ui/switch"
 import { Moon, Sun } from "lucide-react"
 import { useTheme } from "../../../components/theme-provider"
@@ -29,38 +28,6 @@ export default function GlobalSettingsComponent({ settings, onSettingsChange }: 
         <CardTitle className="text-lg sm:text-xl">Global Settings</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="temp-unit">Temperature Unit</Label>
-            <Select
-              value={settings.temperatureUnit}
-              onValueChange={(value) => onSettingsChange({ ...settings, temperatureUnit: value })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="fahrenheit">Fahrenheit (°F)</SelectItem>
-                <SelectItem value="celsius">Celsius (°C)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="update-interval">Update Interval (seconds)</Label>
-            <Input
-              id="update-interval"
-              type="number"
-              value={settings.updateInterval}
-              onChange={(e) => {
-                const value = e.target.value === "" ? 1 : Number(e.target.value)
-                onSettingsChange({ ...settings, updateInterval: isNaN(value) ? 1 : value })
-              }}
-              min="1"
-              max="60"
-            />
-          </div>
-        </div>
 
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0">

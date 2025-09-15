@@ -2,11 +2,13 @@
 #include <fcntl.h>
 #include "esp_http_server.h"
 #include "esp_chip_info.h"
-#include "esp_random.h"
 #include "esp_log.h"
 #include "esp_vfs.h"
 #include "cJSON.h"
 #include "wifi_scan.h"
+#include "wifi_sta.h"
+#include "settings.h"
+#include "temperature.h"
 
 static const char *REST_TAG = "esp-rest";
 #define REST_CHECK(a, str, goto_tag, ...)                                              \
@@ -143,11 +145,59 @@ static esp_err_t temperature_data_get_handler(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "application/json");
     cJSON *root = cJSON_CreateObject();
-    cJSON_AddNumberToObject(root, "raw", esp_random() % 20);
+    cJSON_AddNumberToObject(root, "temp_0", temperature_get_value(0));
+    cJSON_AddNumberToObject(root, "temp_1", temperature_get_value(1));
+    cJSON_AddNumberToObject(root, "temp_2", temperature_get_value(2));
+    cJSON_AddNumberToObject(root, "temp_3", temperature_get_value(3));
+
+    int32_t temp_0, temp_1, temp_2, temp_3;
+    settings_get_temp_target(&temp_0, &temp_1, &temp_2, &temp_3);
+    cJSON_AddNumberToObject(root, "temp_0_target", temp_0);
+    cJSON_AddNumberToObject(root, "temp_1_target", temp_1);
+    cJSON_AddNumberToObject(root, "temp_2_target", temp_2);
+    cJSON_AddNumberToObject(root, "temp_3_target", temp_3);
+
     const char *sys_info = cJSON_Print(root);
     httpd_resp_sendstr(req, sys_info);
     free((void *)sys_info);
     cJSON_Delete(root);
+    return ESP_OK;
+}
+
+/* Handler for setting target temperature */
+static esp_err_t temperature_set_target_handler(httpd_req_t *req) {
+    int total_len = req->content_len;
+    int cur_len = 0;
+    char *buf = ((rest_server_context_t *)(req->user_ctx))->scratch;
+    int received = 0;
+    if (total_len >= SCRATCH_BUFSIZE) {
+        /* Respond with 500 Internal Server Error */
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "content too long");
+        return ESP_FAIL;
+    }
+    while (cur_len < total_len) {
+        received = httpd_req_recv(req, buf + cur_len, total_len);
+        if (received <= 0) {
+            /* Respond with 500 Internal Server Error */
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to post control value");
+            return ESP_FAIL;
+        }
+        cur_len += received;
+    }
+    buf[total_len] = '\0';
+
+    cJSON *root = cJSON_Parse(buf);
+    cJSON *temp_0 = cJSON_GetObjectItem(root, "temp_0");
+    cJSON *temp_1 = cJSON_GetObjectItem(root, "temp_1");
+    cJSON *temp_2 = cJSON_GetObjectItem(root, "temp_2");
+    cJSON *temp_3 = cJSON_GetObjectItem(root, "temp_3");
+    ESP_LOGI(REST_TAG, "Target temperature set to %d", temp_0->valueint);
+    ESP_LOGI(REST_TAG, "Target temperature set to %d", temp_1->valueint);
+    ESP_LOGI(REST_TAG, "Target temperature set to %d", temp_2->valueint);
+    ESP_LOGI(REST_TAG, "Target temperature set to %d", temp_3->valueint);
+    cJSON_Delete(root);
+    settings_set_temp_target(temp_0->valueint, temp_1->valueint, temp_2->valueint, temp_3->valueint);
+    httpd_resp_sendstr(req, "targets updated");
     return ESP_OK;
 }
 
@@ -191,6 +241,130 @@ static esp_err_t wifi_scan_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+/* Handler for SSID of current connected station */
+static esp_err_t wifi_station_get_handler(httpd_req_t *req) {
+    httpd_resp_set_type(req, "application/json");
+    cJSON *root = cJSON_CreateObject();
+    uint8_t ssid[32];
+    wifi_get_station_ssid(ssid, sizeof(ssid));
+    cJSON_AddStringToObject(root, "ssid", (char *)ssid);
+    const char *response = cJSON_Print(root);
+    httpd_resp_sendstr(req, response);
+    free((void *)response);
+    cJSON_Delete(root);
+    return ESP_OK;
+}
+
+/* Handler for setting wifi credentials */
+static esp_err_t wifi_credentials_set_handler(httpd_req_t *req) {
+    int total_len = req->content_len;
+    int cur_len = 0;
+    char *buf = ((rest_server_context_t *)(req->user_ctx))->scratch;
+    int received = 0;
+    
+    // Check for valid content length
+    if (total_len <= 0) {
+        ESP_LOGE(REST_TAG, "Invalid content length: %d", total_len);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid content length");
+        return ESP_FAIL;
+    }
+    
+    if (total_len >= SCRATCH_BUFSIZE) {
+        ESP_LOGE(REST_TAG, "Content too long: %d bytes", total_len);
+        httpd_resp_send_err(req, HTTPD_413_CONTENT_TOO_LARGE, "content too long");
+        return ESP_FAIL;
+    }
+    
+    // Receive the request body
+    while (cur_len < total_len) {
+        received = httpd_req_recv(req, buf + cur_len, total_len - cur_len);
+        if (received <= 0) {
+            ESP_LOGE(REST_TAG, "Failed to receive data, received: %d", received);
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to receive data");
+            return ESP_FAIL;
+        }
+        cur_len += received;
+    }
+    buf[total_len] = '\0';
+
+    // Parse JSON
+    cJSON *root = cJSON_Parse(buf);
+    if (root == NULL) {
+        ESP_LOGE(REST_TAG, "Failed to parse JSON");
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+        return ESP_FAIL;
+    }
+
+    // Get SSID and password from JSON
+    cJSON *ssid = cJSON_GetObjectItem(root, "ssid");
+    cJSON *password = cJSON_GetObjectItem(root, "password");
+    
+    // Validate JSON objects
+    if (!cJSON_IsString(ssid) || !cJSON_IsString(password)) {
+        ESP_LOGE(REST_TAG, "Invalid JSON structure - ssid or password not found or not strings");
+        cJSON_Delete(root);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON structure");
+        return ESP_FAIL;
+    }
+    
+    // Validate string lengths
+    size_t ssid_len = strlen(ssid->valuestring);
+    size_t password_len = strlen(password->valuestring);
+    
+    if (ssid_len == 0 || ssid_len > 32) {
+        ESP_LOGE(REST_TAG, "Invalid SSID length: %d", ssid_len);
+        cJSON_Delete(root);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid SSID length");
+        return ESP_FAIL;
+    }
+    
+    if (password_len > 63) {
+        ESP_LOGE(REST_TAG, "Invalid password length: %d", password_len);
+        cJSON_Delete(root);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid password length");
+        return ESP_FAIL;
+    }
+
+    ESP_LOGI(REST_TAG, "Setting WiFi credentials - SSID: %s, Password length: %d", ssid->valuestring, password_len);
+    
+    settings_set_wifi_config((uint8_t *)ssid->valuestring, ssid_len + 1, (uint8_t *)password->valuestring, password_len + 1);
+    
+    // Mark WiFi as configured
+    settings_set_wifi_configured(true);
+    
+    ESP_LOGI(REST_TAG, "WiFi credentials successfully stored");
+    
+    // Create response JSON
+    cJSON *response = cJSON_CreateObject();
+    cJSON_AddStringToObject(response, "message", "credentials updated");
+    cJSON_AddBoolToObject(response, "success", true);
+    
+    const char *response_str = cJSON_Print(response);
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, response_str);
+    
+    free((void *)response_str);
+    cJSON_Delete(response);
+    cJSON_Delete(root);
+    return ESP_OK;
+}
+
+/* Handler for restarting the device */
+static esp_err_t restart_device_handler(httpd_req_t *req) {
+    ESP_LOGI(REST_TAG, "Restart request received, restarting device in 1 second...");
+    
+    // Send response before restarting
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"message\":\"Device restarting...\",\"success\":true}");
+    
+    // Give time for response to be sent before restarting
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    
+    ESP_LOGI(REST_TAG, "Restarting device now");
+    esp_restart();
+    return ESP_OK;
+}
+
 esp_err_t start_rest_server(const char *base_path)
 {
     REST_CHECK(base_path, "wrong base path", err);
@@ -216,13 +390,23 @@ esp_err_t start_rest_server(const char *base_path)
 
     /* URI handler for fetching temperature data */
     httpd_uri_t temperature_data_get_uri = {
-        .uri = "/api/v1/temp/raw",
+        .uri = "/api/v1/temp/current",
         .method = HTTP_GET,
         .handler = temperature_data_get_handler,
         .user_ctx = rest_context
     };
     httpd_register_uri_handler(server, &temperature_data_get_uri);
 
+
+    /* URI handler for setting target temperature */
+    httpd_uri_t temperature_set_uri = {
+        .uri = "/api/v1/temp/target",
+        .method = HTTP_POST,
+        .handler = temperature_set_target_handler,
+        .user_ctx = rest_context
+    };
+    httpd_register_uri_handler(server, &temperature_set_uri);
+    
     /* URI handler for WiFi scan */
     httpd_uri_t wifi_scan_get_uri = {
         .uri = "/api/v1/wifi/scan",
@@ -231,6 +415,33 @@ esp_err_t start_rest_server(const char *base_path)
         .user_ctx = rest_context
     };
     httpd_register_uri_handler(server, &wifi_scan_get_uri);
+
+    /* URI handler for SSID of current connected station */
+    httpd_uri_t wifi_station_get_uri = {
+        .uri = "/api/v1/wifi/station",
+        .method = HTTP_GET,
+        .handler = wifi_station_get_handler,
+        .user_ctx = rest_context
+    };
+    httpd_register_uri_handler(server, &wifi_station_get_uri);
+
+    /* URI for setting wifi credentials */
+    httpd_uri_t wifi_credentials_set_uri = {
+        .uri = "/api/v1/wifi/credentials",
+        .method = HTTP_POST,
+        .handler = wifi_credentials_set_handler,
+        .user_ctx = rest_context
+    };
+    httpd_register_uri_handler(server, &wifi_credentials_set_uri);
+
+    /* URI handler for restarting the device */
+    httpd_uri_t restart_device_uri = {
+        .uri = "/api/v1/device/restart",
+        .method = HTTP_POST,
+        .handler = restart_device_handler,
+        .user_ctx = rest_context
+    };
+    httpd_register_uri_handler(server, &restart_device_uri);
 
     /* URI handler for getting web server files */
     httpd_uri_t common_get_uri = {

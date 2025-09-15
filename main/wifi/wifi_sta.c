@@ -41,3 +41,10 @@ esp_netif_t *wifi_init_sta(void) {
 
     return esp_netif_sta;
 }
+
+
+void wifi_get_station_ssid(uint8_t *ssid, size_t ssid_len) {
+    wifi_ap_record_t ap_info;
+    esp_wifi_sta_get_ap_info(&ap_info);
+    memcpy(ssid, ap_info.ssid, ssid_len);
+}

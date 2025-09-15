@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
@@ -8,6 +8,7 @@ import { Label } from "../components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog"
 import { Settings, Thermometer, Target } from "lucide-react"
 import Link from "next/link"
+import { useTemperatureData, useSetTemperatureTargets } from "./api/temperature"
 
 interface ThermometerData {
   id: string
@@ -17,30 +18,40 @@ interface ThermometerData {
 }
 
 export default function Dashboard() {
-  const [thermometers, setThermometers] = useState<ThermometerData[]>([
-    {
-      id: "1",
-      name: "Grill Station 1",
-      currentTemp: 63, // 145°F = 63°C
-      targetTemp: 71, // 160°F = 71°C
-    },
-    {
-      id: "2",
-      name: "Smoker Unit",
-      currentTemp: 95, // 203°F = 95°C
-      targetTemp: 93, // 200°F = 93°C
-    },
-    {
-      id: "3",
-      name: "Oven Probe",
-      currentTemp: 74, // 165°F = 74°C
-      targetTemp: 74, // 165°F = 74°C
-    },
-  ])
-
+  const { data: tempData, isLoading, error, mutate } = useTemperatureData()
+  const { setTargets } = useSetTemperatureTargets()
   const [isTargetModalOpen, setIsTargetModalOpen] = useState(false)
   const [editingThermometer, setEditingThermometer] = useState<ThermometerData | null>(null)
   const [newTargetTemp, setNewTargetTemp] = useState("")
+  const [isUpdating, setIsUpdating] = useState(false)
+
+  // Convert API data to thermometer format
+  const thermometers: ThermometerData[] = tempData ? [
+    {
+      id: "1",
+      name: "Probe 1",
+      currentTemp: tempData.temp_0,
+      targetTemp: tempData.temp_0_target,
+    },
+    {
+      id: "2", 
+      name: "Probe 2",
+      currentTemp: tempData.temp_1,
+      targetTemp: tempData.temp_1_target,
+    },
+    {
+      id: "3",
+      name: "Probe 3", 
+      currentTemp: tempData.temp_2,
+      targetTemp: tempData.temp_2_target,
+    },
+    {
+      id: "4",
+      name: "Probe 4",
+      currentTemp: tempData.temp_3,
+      targetTemp: tempData.temp_3_target,
+    },
+  ] : []
 
   const handleTargetClick = (thermometer: ThermometerData) => {
     setEditingThermometer(thermometer)
@@ -48,20 +59,31 @@ export default function Dashboard() {
     setIsTargetModalOpen(true)
   }
 
-  const handleTargetUpdate = () => {
+  const handleTargetUpdate = async () => {
     if (editingThermometer && newTargetTemp) {
       const temp = parseFloat(newTargetTemp)
       if (!isNaN(temp) && temp >= 0 && temp <= 300) {
-        setThermometers(prev => 
-          prev.map(thermo => 
-            thermo.id === editingThermometer.id 
-              ? { ...thermo, targetTemp: temp }
-              : thermo
-          )
-        )
-        setIsTargetModalOpen(false)
-        setEditingThermometer(null)
-        setNewTargetTemp("")
+        setIsUpdating(true)
+        try {
+          // Update the specific probe target
+          const probeIndex = parseInt(editingThermometer.id) - 1
+          const targets = {
+            temp_0: probeIndex === 0 ? temp : tempData?.temp_0_target || 0,
+            temp_1: probeIndex === 1 ? temp : tempData?.temp_1_target || 0,
+            temp_2: probeIndex === 2 ? temp : tempData?.temp_2_target || 0,
+            temp_3: probeIndex === 3 ? temp : tempData?.temp_3_target || 0,
+          }
+          
+          await setTargets(targets)
+          await mutate() // Refresh data
+          setIsTargetModalOpen(false)
+          setEditingThermometer(null)
+          setNewTargetTemp("")
+        } catch (error) {
+          console.error('Failed to update target temperature:', error)
+        } finally {
+          setIsUpdating(false)
+        }
       }
     }
   }
@@ -72,19 +94,6 @@ export default function Dashboard() {
     setNewTargetTemp("")
   }
 
-  // Simulate real-time temperature updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setThermometers((prev) =>
-        prev.map((thermo) => ({
-          ...thermo,
-          currentTemp: thermo.currentTemp + (Math.random() - 0.5) * 2,
-        })),
-      )
-    }, 3000)
-
-    return () => clearInterval(interval)
-  }, [])
 
 
   return (
@@ -103,9 +112,29 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Error State */}
+        {error && (
+          <Card className="mb-8">
+            <CardContent className="p-6 text-center">
+              <p className="text-destructive">Failed to load temperature data</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Loading State */}
+        {isLoading && !error && (
+          <Card className="mb-8">
+            <CardContent className="p-6 text-center">
+              <div className="h-8 w-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-2"></div>
+              <p className="text-muted-foreground">Loading temperature data...</p>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Thermometer Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8 sm:mb-12">
-          {thermometers.map((thermo) => {
+        {!isLoading && !error && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8 sm:mb-12">
+            {thermometers.map((thermo) => {
             
             return (
               <Card key={thermo.id} className="relative overflow-hidden group hover:shadow-xl transition-all duration-300 border-0 bg-blue-200 dark:bg-blue-800/40 h-fit">
@@ -164,7 +193,8 @@ export default function Dashboard() {
               </Card>
             )
           })}
-        </div>
+          </div>
+        )}
 
         {/* Settings Button */}
         <div className="flex justify-end">
@@ -217,8 +247,8 @@ export default function Dashboard() {
             <Button variant="outline" onClick={handleModalClose}>
               Cancel
             </Button>
-            <Button onClick={handleTargetUpdate}>
-              Update Target
+            <Button onClick={handleTargetUpdate} disabled={isUpdating}>
+              {isUpdating ? 'Updating...' : 'Update Target'}
             </Button>
           </DialogFooter>
         </DialogContent>

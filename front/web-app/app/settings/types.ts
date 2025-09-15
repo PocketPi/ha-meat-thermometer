@@ -3,7 +3,6 @@ export interface ThermometerSettings {
   name: string
   targetTemp: number
   alertEnabled: boolean
-  alertThreshold: number
 }
 
 export interface WiFiNetwork {
@@ -12,9 +11,34 @@ export interface WiFiNetwork {
   authmode: number
 }
 
+export interface WiFiStationInfo {
+  ssid: string
+}
+
+export interface WiFiCredentials {
+  ssid: string
+  password: string
+}
+
+export interface TemperatureData {
+  temp_0: number
+  temp_1: number
+  temp_2: number
+  temp_3: number
+  temp_0_target: number
+  temp_1_target: number
+  temp_2_target: number
+  temp_3_target: number
+}
+
+export interface TemperatureTargets {
+  temp_0: number
+  temp_1: number
+  temp_2: number
+  temp_3: number
+}
+
 export interface GlobalSettings {
-  temperatureUnit: string
-  updateInterval: number
   soundAlerts: boolean
   emailNotifications: boolean
   theme: string

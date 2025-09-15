@@ -1,45 +1,55 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Button } from "../../components/ui/button"
-import { Save } from "lucide-react"
 import GlobalSettingsComponent from "./components/GlobalSettings"
 import WiFiSettingsComponent from "./components/WiFiSettings"
 import MQTTSettingsComponent from "./components/MQTTSettings"
 import ThermometerSettingsComponent from "./components/ThermometerSettings"
 import { ThermometerSettings, GlobalSettings, WiFiSettings, MQTTSettings } from "./types"
 import { useTheme } from "../../components/theme-provider"
+import { useTemperatureData } from "../api/temperature"
 
 export default function Settings() {
   const { theme } = useTheme()
+  const { data: tempData } = useTemperatureData()
   
   const [thermometers, setThermometers] = useState<ThermometerSettings[]>([
     {
       id: "1",
       name: "Grill Station 1",
-      targetTemp: 160,
+      targetTemp: tempData?.temp_0_target || 71,
       alertEnabled: true,
-      alertThreshold: 5,
     },
     {
       id: "2",
       name: "Smoker Unit",
-      targetTemp: 200,
+      targetTemp: tempData?.temp_1_target || 93,
       alertEnabled: true,
-      alertThreshold: 3,
     },
     {
       id: "3",
       name: "Oven Probe",
-      targetTemp: 165,
+      targetTemp: tempData?.temp_2_target || 74,
       alertEnabled: false,
-      alertThreshold: 5,
     },
   ])
 
+  // Update thermometer target temperatures when API data changes
+  useEffect(() => {
+    if (tempData) {
+      setThermometers(prev => prev.map((thermo, index) => ({
+        ...thermo,
+        targetTemp: [
+          tempData.temp_0_target,
+          tempData.temp_1_target,
+          tempData.temp_2_target,
+          tempData.temp_3_target
+        ][index] || thermo.targetTemp
+      })))
+    }
+  }, [tempData])
+
   const [globalSettings, setGlobalSettings] = useState<GlobalSettings>({
-    temperatureUnit: "celsius",
-    updateInterval: 1,
     soundAlerts: true,
     emailNotifications: false,
     theme: theme,
@@ -75,44 +85,31 @@ export default function Settings() {
   })
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full overflow-x-hidden">
-      {/* Left Column */}
-      <div className="space-y-6">
-        {/* Global Settings */}
-        <GlobalSettingsComponent
-          settings={globalSettings}
-          onSettingsChange={setGlobalSettings}
-        />
+    <div className="grid grid-cols-1 gap-6 w-full overflow-x-hidden">
+      {/* Global Settings */}
+      <GlobalSettingsComponent
+        settings={globalSettings}
+        onSettingsChange={setGlobalSettings}
+      />
 
-        {/* WiFi Settings */}
-        <WiFiSettingsComponent
-          settings={wifiSettings}
-          onSettingsChange={setWifiSettings}
-        />
-      </div>
+      {/* WiFi Settings */}
+      <WiFiSettingsComponent
+        settings={wifiSettings}
+        onSettingsChange={setWifiSettings}
+      />
 
-      {/* Right Column */}
-      <div className="space-y-6">
-        {/* MQTT Settings */}
-        <MQTTSettingsComponent
-          settings={mqttSettings}
-          onSettingsChange={setMqttSettings}
-        />
+      {/* MQTT Settings */}
+      <MQTTSettingsComponent
+        settings={mqttSettings}
+        onSettingsChange={setMqttSettings}
+      />
 
-        {/* Thermometer Settings */}
-        <ThermometerSettingsComponent
-          thermometers={thermometers}
-          onThermometersChange={setThermometers}
-        />
-      </div>
+      {/* Thermometer Settings */}
+      <ThermometerSettingsComponent
+        thermometers={thermometers}
+        onThermometersChange={setThermometers}
+      />
 
-      {/* Full Width Save Button */}
-      <div className="lg:col-span-2 flex justify-end">
-        <Button size="lg" className="gap-2 w-full sm:w-auto">
-          <Save className="h-4 w-4" />
-          Save Settings
-        </Button>
-      </div>
     </div>
   )
 }

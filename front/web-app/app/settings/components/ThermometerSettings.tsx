@@ -1,12 +1,14 @@
 "use client"
 
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card"
 import { Button } from "../../../components/ui/button"
 import { Input } from "../../../components/ui/input"
 import { Label } from "../../../components/ui/label"
 import { Switch } from "../../../components/ui/switch"
-import { Plus, Trash2 } from "lucide-react"
+import { Plus, Trash2, Loader2 } from "lucide-react"
 import { ThermometerSettings } from "../types"
+import { useTemperatureData, useSetTemperatureTargets } from "../../api/temperature"
 
 interface ThermometerSettingsProps {
   thermometers: ThermometerSettings[]
@@ -14,14 +16,30 @@ interface ThermometerSettingsProps {
 }
 
 export default function ThermometerSettingsComponent({ thermometers, onThermometersChange }: ThermometerSettingsProps) {
+  const { data: tempData, isLoading, error, mutate } = useTemperatureData()
+  const { setTargets } = useSetTemperatureTargets()
+  const [isUpdating, setIsUpdating] = useState(false)
+
+  // Get target temperatures from API data
+  const getTargetTemp = (probeId: string): number => {
+    if (!tempData) return 0
+    const probeIndex = parseInt(probeId) - 1
+    switch (probeIndex) {
+      case 0: return tempData.temp_0_target
+      case 1: return tempData.temp_1_target
+      case 2: return tempData.temp_2_target
+      case 3: return tempData.temp_3_target
+      default: return 0
+    }
+  }
+
   const addThermometer = () => {
     const newId = (thermometers.length + 1).toString()
     const newThermometer: ThermometerSettings = {
       id: newId,
       name: `Thermometer ${newId}`,
-      targetTemp: 160,
+      targetTemp: getTargetTemp(newId),
       alertEnabled: true,
-      alertThreshold: 5,
     }
     onThermometersChange([...thermometers, newThermometer])
   }
@@ -34,16 +52,62 @@ export default function ThermometerSettingsComponent({ thermometers, onThermomet
     onThermometersChange(thermometers.map((t) => (t.id === id ? { ...t, ...updates } : t)))
   }
 
+  const updateTargetTemperature = async (probeId: string, newTemp: number) => {
+    if (!tempData) return
+    
+    setIsUpdating(true)
+    try {
+      const probeIndex = parseInt(probeId) - 1
+      const targets = {
+        temp_0: probeIndex === 0 ? newTemp : tempData.temp_0_target,
+        temp_1: probeIndex === 1 ? newTemp : tempData.temp_1_target,
+        temp_2: probeIndex === 2 ? newTemp : tempData.temp_2_target,
+        temp_3: probeIndex === 3 ? newTemp : tempData.temp_3_target,
+      }
+      
+      await setTargets(targets)
+      await mutate() // Refresh data to get updated targets
+    } catch (error) {
+      console.error('Failed to update target temperature:', error)
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg sm:text-xl">Thermometer Configuration</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-destructive">Failed to load temperature data</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
     <Card>
       <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <CardTitle className="text-lg sm:text-xl">Thermometer Configuration</CardTitle>
-        <Button onClick={addThermometer} size="sm" className="gap-2 self-start sm:self-auto">
+        <Button 
+          onClick={addThermometer} 
+          size="sm" 
+          className="gap-2 self-start sm:self-auto"
+          disabled={isLoading}
+        >
           <Plus className="h-4 w-4" />
           <span className="text-sm">Add Thermometer</span>
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
+        {isLoading && (
+          <div className="flex items-center justify-center py-4">
+            <Loader2 className="h-6 w-6 animate-spin mr-2" />
+            <span className="text-sm text-muted-foreground">Loading temperature data...</span>
+          </div>
+        )}
         {thermometers.map((thermo) => (
           <Card key={thermo.id} className="p-3 sm:p-4">
             <div className="space-y-4">
@@ -71,17 +135,22 @@ export default function ThermometerSettingsComponent({ thermometers, onThermomet
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-sm">Target Temperature (°F)</Label>
+                  <Label className="text-sm">Target Temperature (°C)</Label>
                   <Input
                     type="number"
-                    value={thermo.targetTemp}
+                    value={getTargetTemp(thermo.id)}
                     onChange={(e) => {
-                      const value = e.target.value === "" ? 160 : Number(e.target.value)
-                      updateThermometer(thermo.id, { targetTemp: isNaN(value) ? 160 : value })
+                      const value = e.target.value === "" ? 0 : Number(e.target.value)
+                      if (!isNaN(value)) {
+                        updateThermometer(thermo.id, { targetTemp: value })
+                        // Send update to API immediately
+                        updateTargetTemperature(thermo.id, value)
+                      }
                     }}
-                    min="32"
-                    max="500"
+                    min="0"
+                    max="300"
                     className="text-sm"
+                    disabled={isLoading || isUpdating}
                   />
                 </div>
               </div>
@@ -95,23 +164,6 @@ export default function ThermometerSettingsComponent({ thermometers, onThermomet
                     />
                     <Label className="text-sm">Enable Alerts</Label>
                   </div>
-                  {thermo.alertEnabled && (
-                    <div className="flex items-center space-x-2">
-                      <Label className="text-sm">Threshold:</Label>
-                      <Input
-                        type="number"
-                        value={thermo.alertThreshold}
-                        onChange={(e) => {
-                          const value = e.target.value === "" ? 5 : Number(e.target.value)
-                          updateThermometer(thermo.id, { alertThreshold: isNaN(value) ? 5 : value })
-                        }}
-                        className="w-16 sm:w-20 text-sm"
-                        min="1"
-                        max="20"
-                      />
-                      <span className="text-sm text-muted-foreground">°F</span>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>

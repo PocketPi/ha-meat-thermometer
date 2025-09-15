@@ -81,3 +81,18 @@ void settings_set_wifi_config(const uint8_t *ssid, size_t ssid_len, const uint8_
     nvs_set_blob(settings_nvs_handle, "password", password, password_len);
     nvs_commit(settings_nvs_handle);
 }
+
+void settings_set_temp_target(int32_t temp_0, int32_t temp_1, int32_t temp_2, int32_t temp_3) {
+    nvs_set_i32(settings_nvs_handle, "temp_0", temp_0);
+    nvs_set_i32(settings_nvs_handle, "temp_1", temp_1);
+    nvs_set_i32(settings_nvs_handle, "temp_2", temp_2);
+    nvs_set_i32(settings_nvs_handle, "temp_3", temp_3);
+    nvs_commit(settings_nvs_handle);
+}
+
+void settings_get_temp_target(int32_t *temp_0, int32_t *temp_1, int32_t *temp_2, int32_t *temp_3) {
+    nvs_get_i32(settings_nvs_handle, "temp_0", temp_0);
+    nvs_get_i32(settings_nvs_handle, "temp_1", temp_1);
+    nvs_get_i32(settings_nvs_handle, "temp_2", temp_2);
+    nvs_get_i32(settings_nvs_handle, "temp_3", temp_3);
+}
